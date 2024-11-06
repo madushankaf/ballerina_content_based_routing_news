@@ -9,45 +9,34 @@ listener http:Listener newsApiListener = new (8084);
 
 service /newsapi on newsApiListener {
 
-    resource function post news(http:Caller caller, NewsRequest req) returns error? {
+    resource function post news( NewsRequest req) returns http:Response|error {
         // Retrieve the 'type' parameter from the request JSON payload.
-    
-
-
-        http:Response response;
+        http:Response response = new;
         if req.'type == "sports" {
             // Send GET request to BBC sports feed
-            http:Client sportsClient = check new("https://feeds.bbci.co.uk");
-            http:Response|error sportsResponse = sportsClient->get("/sport/rss.xml");
+            http:Client sportsClient = check new ("https://feeds.bbci.co.uk");
+            log:printInfo("Sending request to BBC sports feed");
+            xml sportsResponse = check sportsClient->get("/sport/rss.xml");
+            // Convert XML to JSON and set it as the payload
+            json sportsJson = { "data": sportsResponse.toString() };
+            response.setJsonPayload(sportsJson);
 
-            if sportsResponse is error {
-                log:printError("Failed to retrieve sports feed", sportsResponse);
-                response = new;
-                response.setJsonPayload({ "message": "Service unavailable" });
-                response.statusCode = 503;
-            } else {
-                response = sportsResponse;
-            }
         } else if req.'type == "news" {
             // Send GET request to NY Times homepage feed
             http:Client newsClient = check new ("https://rss.nytimes.com");
-            http:Response|error newsResponse = newsClient->get("/services/xml/rss/nyt/HomePage.xml");
-
-            if newsResponse is error {
-                log:printError("Failed to retrieve news feed", newsResponse);
-                response = new;
-                response.setJsonPayload({ "message": "Service unavailable" });
-                response.statusCode = 503;
-            } else {
-                response = newsResponse;
-            }
+            log:printInfo("Sending request to NY Times homepage feed");
+            xml newsResponse = check newsClient->get("/services/xml/rss/nyt/HomePage.xml");
+            // Convert XML to JSON and set it as the payload
+            json newsJson = { "data": newsResponse.toString() };
+            response.setJsonPayload(newsJson);
         } else {
             // Handle unrecognized types.
-            check caller->respond({ "message": "Unsuccessful request" });
-            return;
+            log:printError("Unrecognized news type");
+            response.statusCode = 400;
+            response.setJsonPayload({ "message": "Unsuccessful request" });
         }
 
-        // Forward the response to the client.
-        check caller->respond(response);
+        // // Forward the response to the client.
+        return response;
     }
 }
