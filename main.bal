@@ -5,13 +5,12 @@ type NewsRequest record {
     string 'type;
 };
 
-listener http:Listener newsApiListener = new (8084);
+listener http:Listener newsApiListener = new (8086);
 
 service /newsapi on newsApiListener {
 
-    resource function post news( NewsRequest req) returns http:Response|error {
+    resource function post news( NewsRequest req) returns json|error {
         // Retrieve the 'type' parameter from the request JSON payload.
-        http:Response response = new;
         if req.'type == "sports" {
             // Send GET request to BBC sports feed
             http:Client sportsClient = check new ("https://feeds.bbci.co.uk");
@@ -19,7 +18,7 @@ service /newsapi on newsApiListener {
             xml sportsResponse = check sportsClient->get("/sport/rss.xml");
             // Convert XML to JSON and set it as the payload
             json sportsJson = { "data": sportsResponse.toString() };
-            response.setJsonPayload(sportsJson);
+           return sportsJson;
 
         } else if req.'type == "news" {
             // Send GET request to NY Times homepage feed
@@ -28,15 +27,13 @@ service /newsapi on newsApiListener {
             xml newsResponse = check newsClient->get("/services/xml/rss/nyt/HomePage.xml");
             // Convert XML to JSON and set it as the payload
             json newsJson = { "data": newsResponse.toString() };
-            response.setJsonPayload(newsJson);
+            return newsJson;
         } else {
             // Handle unrecognized types.
             log:printError("Unrecognized news type");
-            response.statusCode = 400;
-            response.setJsonPayload({ "message": "Unsuccessful request" });
+            return { "message": "Unsuccessful request" };
         }
 
         // // Forward the response to the client.
-        return response;
     }
 }
